@@ -41,8 +41,10 @@ export function PaymentMethods() {
   })
 
   useEffect(() => {
-    fetchData()
-  }, [])
+    if (user) {
+      fetchData()
+    }
+  }, [user])
 
   const fetchData = async () => {
     try {
