@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Edit, Trash2, CreditCard, Wallet, Banknote, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
+import { Plus, Edit, Trash2, CreditCard, Wallet, Banknote, TrendingUp, TrendingDown, RefreshCw, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 
@@ -214,6 +214,25 @@ export function PaymentMethods() {
     }
   }
 
+  const handleRegenerateJournals = async () => {
+    if (!confirm('Apakah Anda yakin ingin meregenerasi semua jurnal? Ini akan menghapus jurnal yang ada dan membuatnya ulang dari data transaksi.')) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      const { error } = await supabase.rpc('regenerate_journal_entries_rpc')
+      if (error) throw error
+      await fetchData()
+      alert('Jurnal berhasil diregenerasi dan saldo diperbarui')
+    } catch (error) {
+      console.error('Error regenerating journals:', error)
+      alert('Gagal meregenerasi jurnal')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -231,6 +250,14 @@ export function PaymentMethods() {
           <p className="text-gray-600">Kelola metode pembayaran dan saldo</p>
         </div>
         <div className="flex gap-3">
+          <button
+            onClick={handleRegenerateJournals}
+            disabled={loading}
+            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
+          >
+            <AlertTriangle className="w-5 h-5 mr-2" />
+            Regenerasi Jurnal
+          </button>
           <button
             onClick={handleRecalc}
             className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200"

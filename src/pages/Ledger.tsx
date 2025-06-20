@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { CHART_OF_ACCOUNTS } from '../constants/chartOfAccounts'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw, AlertTriangle } from 'lucide-react'
 
 interface LedgerRow {
   code: string
@@ -17,6 +17,7 @@ export default function Ledger() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isBalanced, setIsBalanced] = useState(true)
 
   useEffect(() => {
     fetchLedger()
@@ -26,7 +27,7 @@ export default function Ledger() {
     try {
       setLoading(true)
       
-      // Fetch all journal entries
+      // Fetch all journal entries with account information
       const { data: journalEntries } = await supabase
         .from('journal_entries')
         .select(`
@@ -53,10 +54,16 @@ export default function Ledger() {
       })
 
       // Process journal entries
+      let totalDebits = 0
+      let totalCredits = 0
+
       journalEntries?.forEach(entry => {
         const debitAccount = entry.debit_account
         const creditAccount = entry.credit_account
         const amount = parseFloat(entry.amount || '0')
+
+        totalDebits += amount
+        totalCredits += amount
 
         if (debitAccount && ledgerMap[debitAccount.code]) {
           ledgerMap[debitAccount.code].debit += amount
@@ -66,6 +73,9 @@ export default function Ledger() {
           ledgerMap[creditAccount.code].credit += amount
         }
       })
+
+      // Check if journal is balanced
+      setIsBalanced(Math.abs(totalDebits - totalCredits) < 0.01)
 
       // Calculate balances based on account type and normal balance
       Object.values(ledgerMap).forEach(account => {
@@ -92,11 +102,38 @@ export default function Ledger() {
   const handleRecalc = async () => {
     try {
       setLoading(true)
+      
+      // Call the recalculate function
+      const { error } = await supabase.rpc('recalc_balances_rpc')
+      if (error) throw error
+      
       await fetchLedger()
       alert('Buku besar berhasil diperbarui')
     } catch (error) {
       console.error('Recalc error:', error)
       alert('Gagal memperbarui buku besar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRegenerateJournals = async () => {
+    if (!confirm('Apakah Anda yakin ingin meregenerasi semua jurnal? Ini akan menghapus jurnal yang ada dan membuatnya ulang dari data transaksi.')) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      
+      // Call the regenerate function
+      const { error } = await supabase.rpc('regenerate_journal_entries_rpc')
+      if (error) throw error
+      
+      await fetchLedger()
+      alert('Jurnal berhasil diregenerasi dan saldo diperbarui')
+    } catch (error) {
+      console.error('Regenerate error:', error)
+      alert('Gagal meregenerasi jurnal')
     } finally {
       setLoading(false)
     }
@@ -173,6 +210,16 @@ export default function Ledger() {
             />
           </div>
           <button
+            onClick={handleRegenerateJournals}
+            disabled={loading}
+            className={`flex items-center gap-1 rounded px-3 py-2 text-sm text-white ${
+              loading ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle size={16} />}
+            {loading ? 'Memproses…' : 'Regenerasi Jurnal'}
+          </button>
+          <button
             onClick={handleRecalc}
             disabled={loading}
             className={`flex items-center gap-1 rounded px-3 py-2 text-sm text-white ${
@@ -182,6 +229,16 @@ export default function Ledger() {
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw size={16} />}
             {loading ? 'Memproses…' : 'Refresh'}
           </button>
+        </div>
+      </div>
+
+      {/* Balance Check */}
+      <div className={`p-4 rounded-lg ${isBalanced ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+        <div className="flex items-center gap-2">
+          <div className={`w-3 h-3 rounded-full ${isBalanced ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <span className={`font-medium ${isBalanced ? 'text-green-800' : 'text-red-800'}`}>
+            {isBalanced ? 'Jurnal Seimbang' : 'Jurnal Tidak Seimbang - Periksa Entri Jurnal'}
+          </span>
         </div>
       </div>
 
